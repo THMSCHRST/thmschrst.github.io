@@ -1,36 +1,128 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c&display=swap" rel="stylesheet">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Space Dodger</title>
+  <title>TomTom's Void</title>
   <style>
     body {
       margin: 0;
-      background: black;
+      background: #000;
       overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
+      font-family: 'M PLUS Rounded 1c', sans-serif;
     }
     canvas {
-      border: 2px solid white;
+      border: 2px solid rgba(255, 255, 255, 0.8);
+      border-radius: 20px;
       background: radial-gradient(circle at center, #111, #000);
+      box-shadow: 0 0 20px rgba(0, 200, 255, 0.4);
+    }
+    .game-over {
+      position: absolute;
+      color: white;
+      text-align: center;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 40px 30px 30px;
+      border-radius: 20px;
+      box-shadow: 0 0 40px rgba(0, 200, 255, 0.6);
+      width: 320px;
+      backdrop-filter: blur(5px);
+      border: 1px solid rgba(100, 200, 255, 0.3);
+    }
+    .hidden {
+      display: none;
+    }
+    .score-display {
+      font-size: 90px;
+      margin: 15px 0;
+      text-shadow: 0 0 20px rgba(0, 200, 255, 0.9);
+      color: #fff;
+      font-weight: bold;
+    }
+    .game-over-text {
+      font-size: 36px;
+      margin-bottom: 10px;
+      text-shadow: 0 0 15px rgba(224, 224, 224, 0.8);
+      color: #d9fffa;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    .retry-btn {
+      background: linear-gradient(to bottom, #d2deeb, #a0b1c0);
+      color: white;
+      border: none;
+      padding: 16px 45px;
+      font-size: 24px;
+      border-radius: 50px;
+      cursor: pointer;
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+      margin-top: 25px;
+      box-shadow: 0 5px 20px rgba(0, 100, 255, 0.5);
+      transition: all 0.3s ease;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      font-weight: bold;
+      letter-spacing: 1px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+    .retry-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0, 150, 255, 0.7);
+      background: linear-gradient(to bottom, #7898b6, #b4d7f8);
+    }
+    .retry-btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 15px rgba(0, 100, 255, 0.5);
     }
   </style>
 </head>
 <body>
   <canvas id="game" width="400" height="600"></canvas>
+  <div id="gameOverScreen" class="game-over hidden">
+    <div class="game-over-text">GAME OVER</div>
+    <div class="score-display" id="finalScore">0</div>
+    <button class="retry-btn" onclick="resetGame()">RETRY</button>
+  </div>
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
+    const gameOverScreen = document.getElementById("gameOverScreen");
+    const finalScoreElement = document.getElementById("finalScore");
 
-    const player = { x: 180, y: 500, w: 40, h: 40, speed: 5 };
+    const player = {
+      x: 180,
+      y: 500,
+      w: 40,
+      h: 40,
+      vx: 0,
+      vy: 0,
+      accel: 0.4,
+      maxSpeed: 6,
+      friction: 0.98
+    };
+
     const keys = {};
-    const asteroids = [];
+    let asteroids = [];
     let score = 0;
     let gameOver = false;
+
+    function resetGame() {
+      spawnInterval = 1000;
+      startSpawnTimer();
+      player.x = 180;
+      player.y = 500;
+      player.vx = 0;
+      player.vy = 0;
+      asteroids = [];
+      score = 0;
+      gameOver = false;
+      gameOverScreen.classList.add("hidden");
+    }
 
     function spawnAsteroid() {
       const size = 20 + Math.random() * 30;
@@ -43,34 +135,83 @@
       });
     }
 
+    // Draw rounded outline rectangle helper with glow
+    function drawRoundedRect(x, y, w, h, r, color) {
+      // Add glow effect
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 15;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.stroke();
+      // Reset shadow
+      ctx.shadowBlur = 0;
+    }
+
     function drawPlayer() {
-      ctx.fillStyle = "cyan";
-      ctx.fillRect(player.x, player.y, player.w, player.h);
+      drawRoundedRect(player.x, player.y, player.w, player.h, 8, "cyan");
     }
 
     function drawAsteroids() {
-      ctx.fillStyle = "red";
       for (const a of asteroids) {
-        ctx.fillRect(a.x, a.y, a.w, a.h);
+        drawRoundedRect(a.x, a.y, a.w, a.h, 6, "red");
       }
     }
 
     function update() {
+      updateSpawnRate();
       if (gameOver) return;
 
-      // Player movement
-      if (keys["ArrowLeft"] || keys["a"]) player.x -= player.speed;
-      if (keys["ArrowRight"] || keys["d"]) player.x += player.speed;
-      if (keys["ArrowUp"] || keys["w"]) player.y -= player.speed;
-      if (keys["ArrowDown"] || keys["s"]) player.y += player.speed;
+      // Apply acceleration from input
+      if (keys["ArrowLeft"] || keys["a"]) player.vx -= player.accel+(score/10);
+      if (keys["ArrowRight"] || keys["d"]) player.vx += player.accel+(score/10);
+      if (keys["ArrowUp"] || keys["w"]) player.vy -= player.accel+(score/10);
+      if (keys["ArrowDown"] || keys["s"]) player.vy += player.accel+(score/10);
 
-      // Boundaries
-      player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
-      player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+      // Apply velocity
+      player.x += player.vx;
+      player.y += player.vy;
+
+      // Apply friction
+      player.vx *= player.friction;
+      player.vy *= player.friction;
+
+      // Clamp max speed
+      player.vx = Math.max(-player.maxSpeed, Math.min(player.maxSpeed, player.vx));
+      player.vy = Math.max(-player.maxSpeed, Math.min(player.maxSpeed, player.vy));
+
+      // Bounce off walls
+      if (player.x < 0) {
+        player.x = 0;
+        player.vx *= -1;
+      }
+      if (player.x + player.w > canvas.width) {
+        player.x = canvas.width - player.w;
+        player.vx *= -1;
+      }
+      if (player.y < 0) {
+        player.y = 0;
+        player.vy *= -1;
+      }
+      if (player.y + player.h > canvas.height) {
+        player.y = canvas.height - player.h;
+        player.vy *= -1;
+      }
 
       // Update asteroids
       for (const a of asteroids) {
-        a.y += a.speed;
+        a.y += a.speed + (score/5);
         // Collision detection
         if (
           player.x < a.x + a.w &&
@@ -79,6 +220,9 @@
           player.y + player.h > a.y
         ) {
           gameOver = true;
+          clearInterval(spawnTimer);
+          finalScoreElement.textContent = score;
+          gameOverScreen.classList.remove("hidden");
         }
       }
 
@@ -92,9 +236,13 @@
     }
 
     function drawScore() {
+      // Add glow to in-game score
+      ctx.shadowColor = "white";
+      ctx.shadowBlur = 10;
       ctx.fillStyle = "white";
-      ctx.font = "20px Arial";
-      ctx.fillText("Score: " + score, 10, 30);
+      ctx.font = "20px 'M PLUS Rounded 1c'";
+      ctx.fillText(score, 20, 40);
+      ctx.shadowBlur = 0;
     }
 
     function loop() {
@@ -103,24 +251,40 @@
       drawAsteroids();
       drawScore();
       update();
-
-      if (gameOver) {
-        ctx.fillStyle = "white";
-        ctx.font = "40px Arial";
-        ctx.fillText("GAME OVER", 90, 300);
-        ctx.font = "20px Arial";
-        ctx.fillText("Final Score: " + score, 130, 340);
-      }
-
       requestAnimationFrame(loop);
     }
 
     // Input
-    window.addEventListener("keydown", e => (keys[e.key] = true));
+    window.addEventListener("keydown", e => {
+      keys[e.key] = true;
+
+      // Restart game with any key if game is over
+//      if (gameOver) {
+//        resetGame();
+      }
+//    });
+    );
+
     window.addEventListener("keyup", e => (keys[e.key] = false));
 
     // Spawn asteroids every second
-    setInterval(spawnAsteroid, 1000);
+    let spawnInterval = 1000; // Initial spawn interval
+    let spawnTimer = null;
+
+    function startSpawnTimer() {
+        if (spawnTimer) clearInterval(spawnTimer);
+        spawnTimer = setInterval(spawnAsteroid, spawnInterval);
+    }
+
+    function updateSpawnRate() {
+    // Only update if score has changed significantly
+    const newInterval = Math.max(150, 1000 - (score*15));
+    if (Math.abs(spawnInterval - newInterval) > 50) {
+        spawnInterval = newInterval;
+        startSpawnTimer();
+    }
+    }
+    startSpawnTimer();
 
     loop();
   </script>
